@@ -9,9 +9,15 @@ Deno.serve(async (req) => {
     try {
         const { gameId, playerId, playerName } = await req.json();
 
-        if (!gameId) throw new Error("no gameId provided");
-        if (!playerId) throw new Error("no playerId provided");
-        if (!playerName) throw new Error("no playerName provided");
+        if (!gameId || typeof gameId !== "string") {
+            throw new Error("no valid gameId provided");
+        }
+        if (!playerId || typeof playerId !== "string") {
+            throw new Error("no valid playerId provided");
+        }
+        if (!playerName || typeof playerName !== "string") {
+            throw new Error("no valid playerName provided");
+        }
 
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
@@ -54,7 +60,7 @@ Deno.serve(async (req) => {
         });
     } catch (err) {
         return new Response(String(err?.message ?? err), {
-            headers: { ...corsHeaders },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 500,
         });
     }
