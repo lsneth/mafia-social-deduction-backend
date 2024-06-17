@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
             },
         );
 
+        // validate game exists and is in lobby phase
         const { data: gameData, error: gameError } = await supabase.from(gameId)
             .select();
 
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
             throw new Error(`game ${gameId} has already started`);
         }
 
-        // add player to game, return response
+        // add player to game
         const { data, error } = await supabase.from(gameId).insert({
             player_id: playerId,
             name: playerName,
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
             status: 200,
         });
     } catch (err) {
-        return new Response(String(err?.message ?? err), {
+        return new Response(JSON.stringify({ error: err?.message ?? err }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 500,
         });
