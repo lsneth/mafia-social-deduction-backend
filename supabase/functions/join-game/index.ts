@@ -9,14 +9,10 @@ Deno.serve(async (req) => {
     try {
         const { gameId, playerId, playerName } = await req.json();
 
-        if (!gameId || typeof gameId !== "string") {
-            throw new Error("no valid gameId provided");
-        }
-        if (!playerId || typeof playerId !== "string") {
-            throw new Error("no valid playerId provided");
-        }
-        if (!playerName || typeof playerName !== "string") {
-            throw new Error("no valid playerName provided");
+        if (!playerName) {
+            throw new Error(
+                "Please add a name to your account to join a game.",
+            );
         }
 
         const supabase = createClient(
@@ -31,25 +27,33 @@ Deno.serve(async (req) => {
             },
         );
 
-        // validate game exists and is in lobby phase
-        const { data: gameData, error: gameError } = await supabase.from(gameId)
-            .select();
+        // get all players in game
+        const { data: playerData, error: playerError } = await supabase.from(
+            "players",
+        ).select("player_id")
+            .eq("game_id", gameId);
+        if (playerError) throw playerError;
 
+        // see if game is already full
+        if (playerData.length >= 15) {
+            throw new Error("there are already 15 players");
+        }
+
+        // see if game has already started
+        const { data: gameData, error: gameError } = await supabase.from(
+            "games",
+        ).select("phase").eq(
+            "id",
+            gameId,
+        ).single();
         if (gameError) throw gameError;
+        const { phase } = gameData;
+        if (phase !== "lobby") throw new Error("game has already started");
 
-        if (gameData.length >= 15) {
-            throw new Error(`game ${gameId} already has 15 players`);
-        }
-
-        const gamePhase = gameData.find((row) => row.is_host === true).phase;
-
-        if (gamePhase !== "lobby") {
-            throw new Error(`game ${gameId} has already started`);
-        }
-
-        // add player to game
-        const { data, error } = await supabase.from(gameId).insert({
+        // finally add player to game
+        const { data, error } = await supabase.from("players").insert({
             player_id: playerId,
+            game_id: gameId,
             name: playerName,
         });
 
