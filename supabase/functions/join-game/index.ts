@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
         // get all players in game
         const { data: playerData, error: playerError } = await supabase.from(
             "players",
-        ).select("player_id")
+        ).select("profile_id")
             .eq("game_id", gameId);
         if (playerError) throw playerError;
 
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
 
         // finally add player to game
         const { data, error } = await supabase.from("players").insert({
-            player_id: playerId,
+            profile_id: playerId,
             game_id: gameId,
             name: playerName,
         });
