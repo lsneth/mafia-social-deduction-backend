@@ -9,7 +9,7 @@ function getGameLengthInHours(utcStartTime: string): number {
     return Math.floor(diffInHours);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async () => {
     try {
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
