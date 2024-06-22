@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const { gameId, playerId, playerName } = await req.json();
+        const { gameId, playerId, playerName, isHost } = await req.json();
 
         if (!playerName) {
             throw new Error(
@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
             profile_id: playerId,
             game_id: gameId,
             name: playerName,
+            is_host: isHost,
         });
 
         if (error) throw error;
