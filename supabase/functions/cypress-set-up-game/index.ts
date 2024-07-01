@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
             numOtherPlayers = 0, // number of other players besides the test user and/or test host
             phase = "lobby",
             myRole = "innocent",
+            allReady = false,
         }: {
             hostedByMe: boolean;
             addMe: boolean;
@@ -66,6 +67,7 @@ Deno.serve(async (req) => {
                 | "innocent"
                 | "end";
             myRole: "innocent" | "mafia" | "investigator";
+            allReady: boolean;
         } = await req.json();
 
         const supabase = createClient(
@@ -106,6 +108,7 @@ Deno.serve(async (req) => {
                     game_id: CYPRESS_TEST_GAME_ID,
                     role: myRole,
                     name: CYPRESS_TEST_USER_NAME,
+                    ready: allReady,
                 });
             if (addMeAsHostError) throw addMeAsHostError;
         } else {
@@ -117,6 +120,7 @@ Deno.serve(async (req) => {
                     game_id: CYPRESS_TEST_GAME_ID,
                     role: "innocent",
                     name: "host",
+                    ready: allReady,
                 });
             if (addOtherError) throw addOtherError;
 
@@ -129,6 +133,7 @@ Deno.serve(async (req) => {
                         game_id: CYPRESS_TEST_GAME_ID,
                         role: myRole,
                         name: CYPRESS_TEST_USER_NAME,
+                        ready: allReady,
                     });
                 if (addMeError) throw addMeError;
             }
@@ -143,6 +148,7 @@ Deno.serve(async (req) => {
             game_id: CYPRESS_TEST_GAME_ID,
             role: "innocent",
             name: `test${index + 1}`,
+            ready: allReady,
         }));
 
         // add testPlayers to "players" table
@@ -158,9 +164,6 @@ Deno.serve(async (req) => {
                 .update({
                     phase,
                 }).eq("id", CYPRESS_TEST_GAME_ID);
-
-            console.log("updatePhaseError:", updatePhaseError);
-
             if (updatePhaseError) throw updatePhaseError;
         }
 
