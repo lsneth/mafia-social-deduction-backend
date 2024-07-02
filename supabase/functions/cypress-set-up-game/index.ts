@@ -7,9 +7,8 @@ const CYPRESS_TEST_GAME_ID = Deno.env.get("CYPRESS_TEST_GAME_ID")?.toString() ??
     "";
 const CYPRESS_TEST_HOST_USER_ID =
     Deno.env.get("CYPRESS_TEST_HOST_USER_ID")?.toString() ?? "";
-const CYPRESS_TEST_USER_NAME = "test0";
 
-const CYPRESS_TEST_USERS = [
+const CYPRESS_TEST_USER_IDS = [
     Deno.env.get("CYPRESS_TEST_USER_ID_1")?.toString() ?? "",
     Deno.env.get("CYPRESS_TEST_USER_ID_2")?.toString() ?? "",
     Deno.env.get("CYPRESS_TEST_USER_ID_3")?.toString() ?? "",
@@ -37,8 +36,8 @@ Deno.serve(async (req) => {
             addMe = false,
             numOtherPlayers = 0, // number of other players besides the test user and/or test host
             phase = "lobby",
-            myRole = "innocent",
-            allReady = false,
+            myRole,
+            ready = "",
         }: {
             hostedByMe: boolean;
             addMe: boolean;
@@ -67,7 +66,7 @@ Deno.serve(async (req) => {
                 | "innocent"
                 | "end";
             myRole: "innocent" | "mafia" | "investigator";
-            allReady: boolean;
+            ready: string;
         } = await req.json();
 
         const supabase = createClient(
@@ -82,6 +81,46 @@ Deno.serve(async (req) => {
             },
         );
 
+        // create game and player rows
+        const gameObj = {
+            id: CYPRESS_TEST_GAME_ID,
+            phase: "lobby", // can't pass in phase from arg here because then we can't add players because of an RLS policy
+            host_id: hostedByMe
+                ? CYPRESS_TEST_USER_ID
+                : CYPRESS_TEST_HOST_USER_ID,
+        };
+
+        const playersArray = [
+            !hostedByMe
+                ? {
+                    game_id: CYPRESS_TEST_GAME_ID,
+                    profile_id: CYPRESS_TEST_HOST_USER_ID,
+                    name: "host",
+                    ready: ready === "all" || ready == CYPRESS_TEST_HOST_USER_ID
+                        ? true
+                        : false,
+                }
+                : null,
+            hostedByMe || addMe
+                ? {
+                    game_id: CYPRESS_TEST_GAME_ID,
+                    profile_id: CYPRESS_TEST_USER_ID,
+                    name: "test0",
+                    ready: ready === "all" || ready == CYPRESS_TEST_USER_ID
+                        ? true
+                        : false,
+                }
+                : null,
+            ...CYPRESS_TEST_USER_IDS.map((id, index) => {
+                return {
+                    game_id: CYPRESS_TEST_GAME_ID,
+                    profile_id: id,
+                    name: `test${index + 1}`,
+                    ready: ready === "all" || ready == id ? true : false,
+                };
+            }).slice(0, numOtherPlayers),
+        ].filter((player) => player !== null);
+
         // delete test game (this also deletes the test players from the "players" table)
         const { error: deleteGameError } = await supabase.from("games").delete()
             .eq("id", CYPRESS_TEST_GAME_ID);
@@ -90,81 +129,42 @@ Deno.serve(async (req) => {
         // create a new game
         const { error: createGameError } = await supabase
             .from("games")
-            .insert({
-                id: CYPRESS_TEST_GAME_ID,
-                phase: "lobby",
-                host_id: hostedByMe
-                    ? CYPRESS_TEST_USER_ID
-                    : CYPRESS_TEST_HOST_USER_ID,
-            });
+            .insert(gameObj);
         if (createGameError) throw createGameError;
 
-        if (hostedByMe) {
-            // if hostedByMe is true, add the test user to the "players" table
-            const { error: addMeAsHostError } = await supabase
-                .from("players")
-                .insert({
-                    profile_id: CYPRESS_TEST_USER_ID,
-                    game_id: CYPRESS_TEST_GAME_ID,
-                    role: myRole,
-                    name: CYPRESS_TEST_USER_NAME,
-                    ready: allReady,
-                });
-            if (addMeAsHostError) throw addMeAsHostError;
-        } else {
-            // if hostedByMe is false, add the test host to the "players" table
-            const { error: addOtherError } = await supabase
-                .from("players")
-                .insert({
-                    profile_id: CYPRESS_TEST_HOST_USER_ID,
-                    game_id: CYPRESS_TEST_GAME_ID,
-                    role: "innocent",
-                    name: "host",
-                    ready: allReady,
-                });
-            if (addOtherError) throw addOtherError;
-
-            if (addMe) {
-                // if addMe is true, add the test user to the "players" table too
-                const { error: addMeError } = await supabase
-                    .from("players")
-                    .insert({
-                        profile_id: CYPRESS_TEST_USER_ID,
-                        game_id: CYPRESS_TEST_GAME_ID,
-                        role: myRole,
-                        name: CYPRESS_TEST_USER_NAME,
-                        ready: allReady,
-                    });
-                if (addMeError) throw addMeError;
-            }
-        }
-
-        // create array of testPlayers with length equal to numOtherPlayers
-        const testUsers = CYPRESS_TEST_USERS.slice(0, numOtherPlayers).map((
-            id,
-            index,
-        ) => ({
-            profile_id: id,
-            game_id: CYPRESS_TEST_GAME_ID,
-            role: "innocent",
-            name: `test${index + 1}`,
-            ready: allReady,
-        }));
-
-        // add testPlayers to "players" table
+        // add playersArray to "players" table
         const { error: addPlayersError } = await supabase
             .from("players")
-            .insert([...testUsers]);
+            .insert([...playersArray]);
+
         if (addPlayersError) throw addPlayersError;
 
-        // if phase that was passed isn't "lobby", update the phase to the passed phase now that players are added
+        // assign roles
+        const { error: assignRolesError } = await supabase.functions.invoke(
+            "assign-roles",
+            {
+                body: {
+                    gameId: CYPRESS_TEST_GAME_ID,
+                    playerCount: playersArray.length,
+                },
+            },
+        );
+        if (assignRolesError) throw assignRolesError;
+
         if (phase !== "lobby") {
-            const { error: updatePhaseError } = await supabase
+            const { error: phaseError } = await supabase
                 .from("games")
-                .update({
-                    phase,
-                }).eq("id", CYPRESS_TEST_GAME_ID);
-            if (updatePhaseError) throw updatePhaseError;
+                .update({ phase })
+                .eq("id", CYPRESS_TEST_GAME_ID);
+            if (phaseError) throw phaseError;
+        }
+
+        if (myRole) {
+            const { error: myRoleError } = await supabase
+                .from("players")
+                .update({ role: myRole })
+                .eq("profile_id", CYPRESS_TEST_USER_ID);
+            if (myRoleError) throw myRoleError;
         }
 
         return new Response(
