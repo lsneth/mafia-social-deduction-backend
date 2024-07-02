@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
             phase = "lobby",
             myRole,
             ready = "",
+            selectedPlayerId,
         }: {
             hostedByMe: boolean;
             addMe: boolean;
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
                 | "end";
             myRole: "innocent" | "mafia" | "investigator";
             ready: string;
+            selectedPlayerId: string;
         } = await req.json();
 
         const supabase = createClient(
@@ -105,6 +107,7 @@ Deno.serve(async (req) => {
                 ? {
                     game_id: CYPRESS_TEST_GAME_ID,
                     profile_id: CYPRESS_TEST_USER_ID,
+                    selected_player_id: selectedPlayerId,
                     name: "test0",
                     ready: ready === "all" || ready == CYPRESS_TEST_USER_ID
                         ? true
