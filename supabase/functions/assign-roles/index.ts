@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.5";
 import { corsHeaders } from "../_shared/cors.ts";
 
-export default function getRoleArray(playerCount: number) {
+function getRoleArray(playerCount: number) {
     const mafiaCount = playerCount <= 4
         ? 0
         : playerCount <= 6

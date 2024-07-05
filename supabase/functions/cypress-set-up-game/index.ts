@@ -1,6 +1,40 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.5";
 import { corsHeaders } from "../_shared/cors.ts";
 
+function getRoleArray(
+    playerCount: number,
+    myRole: "innocent" | "mafia" | "investigator" | null,
+) {
+    const mafiaCount = playerCount <= 4
+        ? 0
+        : playerCount <= 6
+        ? 1
+        : playerCount <= 11
+        ? 2
+        : 3;
+    const investigatorCount = playerCount <= 4 ? 0 : playerCount <= 11 ? 1 : 2;
+    const innocentCount = playerCount - mafiaCount - investigatorCount;
+
+    const roles: string[] = [];
+    for (let i = 0; i < mafiaCount - (myRole === "mafia" ? 1 : 0); i++) {
+        roles.push("mafia");
+    }
+    for (
+        let i = 0;
+        i < investigatorCount -
+                (myRole === "investigator" ? 1 : 0);
+        i++
+    ) roles.push("investigator");
+    for (
+        let i = 0;
+        i < innocentCount -
+                (myRole === "innocent" ? 1 : 0);
+        i++
+    ) roles.push("innocent");
+
+    return roles;
+}
+
 const CYPRESS_TEST_USER_ID = Deno.env.get("CYPRESS_TEST_USER_ID")?.toString() ??
     "";
 const CYPRESS_TEST_GAME_ID = Deno.env.get("CYPRESS_TEST_GAME_ID")?.toString() ??
@@ -36,7 +70,7 @@ Deno.serve(async (req) => {
             addMe = false,
             numOtherPlayers = 0, // number of other players besides the test user and/or test host
             phase = "lobby",
-            myRole,
+            myRole = null,
             ready = "",
             selectedPlayerId,
         }: {
@@ -66,7 +100,7 @@ Deno.serve(async (req) => {
                 | "investigator"
                 | "innocent"
                 | "end";
-            myRole: "innocent" | "mafia" | "investigator";
+            myRole: "innocent" | "mafia" | "investigator" | null;
             ready: string;
             selectedPlayerId: string;
         } = await req.json();
@@ -92,12 +126,19 @@ Deno.serve(async (req) => {
                 : CYPRESS_TEST_HOST_USER_ID,
         };
 
+        const rolesArray = getRoleArray(
+            numOtherPlayers + (hostedByMe || addMe ? 1 : 0) +
+                (!hostedByMe ? 1 : 0),
+            myRole,
+        );
+
         const playersArray = [
             !hostedByMe
                 ? {
                     game_id: CYPRESS_TEST_GAME_ID,
                     profile_id: CYPRESS_TEST_HOST_USER_ID,
                     name: "host",
+                    role: rolesArray.pop(),
                     ready: ready === "all" || ready == CYPRESS_TEST_HOST_USER_ID
                         ? true
                         : false,
@@ -108,6 +149,7 @@ Deno.serve(async (req) => {
                     game_id: CYPRESS_TEST_GAME_ID,
                     profile_id: CYPRESS_TEST_USER_ID,
                     selected_player_id: selectedPlayerId,
+                    role: myRole ? myRole : rolesArray.pop(),
                     name: "test0",
                     ready: ready === "all" || ready == CYPRESS_TEST_USER_ID
                         ? true
@@ -118,6 +160,7 @@ Deno.serve(async (req) => {
                 return {
                     game_id: CYPRESS_TEST_GAME_ID,
                     profile_id: id,
+                    role: rolesArray.pop(),
                     name: `test${index + 1}`,
                     ready: ready === "all" || ready == id ? true : false,
                 };
@@ -142,32 +185,12 @@ Deno.serve(async (req) => {
 
         if (addPlayersError) throw addPlayersError;
 
-        // assign roles
-        const { error: assignRolesError } = await supabase.functions.invoke(
-            "assign-roles",
-            {
-                body: {
-                    gameId: CYPRESS_TEST_GAME_ID,
-                    playerCount: playersArray.length,
-                },
-            },
-        );
-        if (assignRolesError) throw assignRolesError;
-
         if (phase !== "lobby") {
             const { error: phaseError } = await supabase
                 .from("games")
                 .update({ phase })
                 .eq("id", CYPRESS_TEST_GAME_ID);
             if (phaseError) throw phaseError;
-        }
-
-        if (myRole) {
-            const { error: myRoleError } = await supabase
-                .from("players")
-                .update({ role: myRole })
-                .eq("profile_id", CYPRESS_TEST_USER_ID);
-            if (myRoleError) throw myRoleError;
         }
 
         return new Response(
