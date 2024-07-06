@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
                 | "role"
                 | "mafia"
                 | "investigator"
-                | "innocent"
+                | "execution"
                 | "end";
             myRole: "innocent" | "mafia" | "investigator" | null;
             ready: string;
