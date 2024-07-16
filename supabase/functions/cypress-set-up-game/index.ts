@@ -73,6 +73,8 @@ Deno.serve(async (req) => {
             myRole = null,
             ready = "",
             selectedPlayerId,
+            result = null,
+            murderedPlayerId = null,
         }: {
             hostedByMe: boolean;
             addMe: boolean;
@@ -103,6 +105,8 @@ Deno.serve(async (req) => {
             myRole: "innocent" | "mafia" | "investigator" | null;
             ready: string;
             selectedPlayerId: string;
+            result: "mafia" | "innocent" | null;
+            murderedPlayerId: string | null;
         } = await req.json();
 
         const supabase = createClient(
@@ -124,6 +128,7 @@ Deno.serve(async (req) => {
             host_id: hostedByMe
                 ? CYPRESS_TEST_USER_ID
                 : CYPRESS_TEST_HOST_USER_ID,
+            result,
         };
 
         const rolesArray = getRoleArray(
@@ -142,6 +147,7 @@ Deno.serve(async (req) => {
                     ready: ready === "all" || ready == CYPRESS_TEST_HOST_USER_ID
                         ? true
                         : false,
+                    has_been_murdered: false,
                 }
                 : null,
             hostedByMe || addMe
@@ -154,6 +160,7 @@ Deno.serve(async (req) => {
                     ready: ready === "all" || ready == CYPRESS_TEST_USER_ID
                         ? true
                         : false,
+                    has_been_murdered: false,
                 }
                 : null,
             ...CYPRESS_TEST_USER_IDS.map((id, index) => {
@@ -163,6 +170,7 @@ Deno.serve(async (req) => {
                     role: rolesArray.pop(),
                     name: `test${index + 1}`,
                     ready: ready === "all" || ready == id ? true : false,
+                    has_been_murdered: id === murderedPlayerId,
                 };
             }).slice(0, numOtherPlayers),
         ].filter((player) => player !== null);
